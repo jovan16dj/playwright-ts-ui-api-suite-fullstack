@@ -1,0 +1,101 @@
+name: CI Playwright Tests
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Install backend dependencies
+        run: npm --prefix fullstack-app/backend install
+
+      - name: Install frontend dependencies
+        run: npm --prefix fullstack-app/frontend install
+
+      - name: Start API with coverage instrumentation
+        run: |
+          cd fullstack-app/backend
+          (
+            # c8 instruments everything it requires
+            nohup npx c8 --reporter=none --temp-directory=.nyc_output \
+              node server.js > server.log 2>&1 & echo $! > api.pid
+          )
+          sleep 1
+          if ! ps -p $(cat api.pid) > /dev/null; then
+            echo 'Server failed to start'; cat server.log; exit 1
+          fi
+
+      - name: Wait for API to become healthy
+        run: npx wait-on http://localhost:5001/health
+
+      - name: Run Playwright tests
+        run: npx playwright test --reporter=dot,html
+
+      - name: Confirm API PID
+        run: cat fullstack-app/backend/api.pid
+
+      - name: Stop API and flush coverage
+        run: |
+          WRAPPER=$(cat fullstack-app/backend/api.pid)
+          NODE_PID=$(pgrep -P $WRAPPER node | head -n1)
+
+          if [ -n "$NODE_PID" ]; then
+            kill -2 $NODE_PID
+            while kill -0 $NODE_PID 2>/dev/null; do sleep 0.5; done
+          fi
+
+          kill $WRAPPER || true
+
+      - name: Generate lcov from c8 data
+        run: |
+          cd fullstack-app/backend
+          npx c8 report \
+            --temp-directory=.nyc_output \
+            --reporter=lcov \
+            --reporter=text \
+            --reports-dir=coverage
+
+      - name: Upload Playwright HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+      - name: Upload backend coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: fullstack-app/backend/coverage
+
+      - name: Print coverage file
+        run: cat fullstack-app/backend/coverage/lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: fullstack-app/backend/coverage/lcov.info
+          flags: backend
+          name: codecov-backend

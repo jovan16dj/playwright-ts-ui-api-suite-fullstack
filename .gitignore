@@ -1,0 +1,30 @@
+# Root-level dependencies
+/node_modules/
+
+# Playwright artifacts & code coverage
+/playwright-report/
+/coverage/
+/test-results/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE / OS files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*.local
+
+# Frontend build & caches
+/fullstack-app/frontend/dist/
+/fullstack-app/frontend/.parcel-cache/
+/fullstack-app/frontend/node_modules/
+
+# Backend dependencies
+/fullstack-app/backend/node_modules/
