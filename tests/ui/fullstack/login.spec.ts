@@ -7,15 +7,15 @@ test.describe('Login functionality', () => {
   });
 
   test('Invalid login shows an alert', async ({ page }) => {
-  
-    page.on('dialog', async dialog => {
-      expect(dialog.message()).toBe('Invalid credentials');
-      await dialog.accept();
-    });
-
     await page.goto('/');
     await page.getByPlaceholder('Username').fill('wrong');
     await page.getByPlaceholder('Password').fill('wrong');
-    await page.getByRole('button', { name: 'Login' }).click();
+    
+    const [dialog] = await Promise.all([
+      page.waitForEvent('dialog'),
+      page.getByRole('button', { name: 'Login' }).click()
+    ]);
+    expect(dialog.message()).toBe('Invalid credentials');
+    await dialog.accept();
   });
 });
